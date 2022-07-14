@@ -15,8 +15,8 @@ use core::convert::Infallible;
 // The macro for our start-up function
 use cortex_m_rt::entry;
 
-// use embedded_hal::digital::v2::OutputPin;
-// // Time handling traits
+use embedded_hal::digital::v2::OutputPin;
+// Time handling traits
 use embedded_time::rate::*;
 
 // Ensure we halt the program on panic (if we don't mention this crate it won't
@@ -125,7 +125,7 @@ fn main() -> ! {
     );
 
     // Set the LED to be an output
-    // let mut led_pin = pins.sck0.into_push_pull_output();
+    let mut led_pin = pins.sck0.into_push_pull_output();
 
     // Set up the USB driver
     let usb_bus = UsbBusAllocator::new(hal::usb::UsbBus::new(
@@ -147,22 +147,27 @@ fn main() -> ! {
         .device_class(2) // from: https://www.usb.org/defined-class-codes
         .build();
 
+    // Wait for host to recognize serial device
     let timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS);
-    let mut said_hello = true;
+    loop {
+        // Consume new data
+        if usb_dev.poll(&mut [&mut serial]) {
+            let mut buf = [0u8; 64];
+            serial.read(&mut buf).ok();
+        }
+
+        if timer.get_counter() >= 2_000_000 {
+            uprintln!(serial, "Serial setup complete");
+            break;
+        }
+    }
+
     let mut count = 1;
     loop {
-        //led_pin.set_high().unwrap();
-        //delay.delay_ms(500);
-        //led_pin.set_low().unwrap();
-        //delay.delay_ms(500);
-
-        //delay.delay_ms(1000);
-
-        // A welcome message at the beginning
-        if !said_hello && timer.get_counter() >= 2_000_000 {
-            said_hello = true;
-            uprintln!(serial, "Hello, world!");
-        }
+        led_pin.set_high().unwrap();
+        delay.delay_ms(500);
+        led_pin.set_low().unwrap();
+        delay.delay_ms(500);
 
         uprintln!(serial, "blink {}", count);
         count += 1;
