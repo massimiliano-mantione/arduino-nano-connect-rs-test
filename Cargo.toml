@@ -1,0 +1,17 @@
+[package]
+name = "blink"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arduino_nano_connect = { version = "0.2.1", features = ["rt", "boot2"] }
+cortex-m = "0.7.3"
+rp2040-hal = { version = "0.5.0" }
+rp2040-boot2 = { version = "0.2.0" }
+cortex-m-rt = { version = "0.7.0" }
+embedded-hal = { version = "0.2.4", features = ["unproven"] }
+panic-probe = { version = "0.2.0", features = ["print-defmt"] }
+embedded-time = "0.12.0"
+panic-halt = "0.2.0"
