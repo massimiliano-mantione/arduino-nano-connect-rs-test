@@ -10,10 +10,12 @@
 #![no_std]
 #![no_main]
 
+use core::convert::Infallible;
+
 // The macro for our start-up function
 use cortex_m_rt::entry;
 
-use embedded_hal::digital::v2::OutputPin;
+// use embedded_hal::digital::v2::OutputPin;
 // // Time handling traits
 use embedded_time::rate::*;
 
@@ -39,6 +41,42 @@ use usb_device::{class_prelude::*, prelude::*};
 
 // USB Communications Class Device support
 use usbd_serial::SerialPort;
+
+use arrayvec::ArrayString;
+use ufmt::uWrite;
+
+const LINE_SIZE: usize = 128;
+
+struct WritableLine {
+    s: ArrayString<LINE_SIZE>,
+}
+
+impl WritableLine {
+    pub fn new() -> Self {
+        Self {
+            s: ArrayString::new(),
+        }
+    }
+}
+
+impl uWrite for WritableLine {
+    type Error = Infallible;
+
+    fn write_str(&mut self, s: &str) -> Result<(), Self::Error> {
+        self.s.push_str(s);
+        Ok(())
+    }
+}
+
+macro_rules! uprintln {
+    // IMPORTANT use `tt` fragments instead of `expr` fragments (i.e. `$($exprs:expr),*`)
+    ($writer:expr, $($tt:tt)*) => {{
+        let mut line = WritableLine::new();
+        ufmt::uwriteln!(&mut line, $($tt)*).ok();
+        $writer.write(line.s.as_str().as_bytes()).ok();
+        $writer.write(b"\r").ok()
+    }}
+}
 
 /// Entry point to our bare-metal application.
 ///
@@ -87,15 +125,7 @@ fn main() -> ! {
     );
 
     // Set the LED to be an output
-    let mut led_pin = pins.sck0.into_push_pull_output();
-
-    // Blink the 4 times LED at 1 Hz
-    for _ in 0..4 {
-        led_pin.set_high().unwrap();
-        delay.delay_ms(500);
-        led_pin.set_low().unwrap();
-        delay.delay_ms(500);
-    }
+    // let mut led_pin = pins.sck0.into_push_pull_output();
 
     // Set up the USB driver
     let usb_bus = UsbBusAllocator::new(hal::usb::UsbBus::new(
@@ -118,44 +148,29 @@ fn main() -> ! {
         .build();
 
     let timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS);
-    let mut said_hello = false;
+    let mut said_hello = true;
+    let mut count = 1;
     loop {
+        //led_pin.set_high().unwrap();
+        //delay.delay_ms(500);
+        //led_pin.set_low().unwrap();
+        //delay.delay_ms(500);
+
+        //delay.delay_ms(1000);
+
         // A welcome message at the beginning
         if !said_hello && timer.get_counter() >= 2_000_000 {
             said_hello = true;
-            let _ = serial.write(b"Hello, World!\r\n");
+            uprintln!(serial, "Hello, world!");
         }
 
-        // Check for new data
+        uprintln!(serial, "blink {}", count);
+        count += 1;
+
+        // Consume new data
         if usb_dev.poll(&mut [&mut serial]) {
             let mut buf = [0u8; 64];
-            match serial.read(&mut buf) {
-                Err(_e) => {
-                    // Do nothing
-                }
-                Ok(0) => {
-                    // Do nothing
-                }
-                Ok(count) => {
-                    // Convert to upper case
-                    buf.iter_mut().take(count).for_each(|b| {
-                        b.make_ascii_uppercase();
-                    });
-                    // Send back to the host
-                    let mut wr_ptr = &buf[..count];
-                    while !wr_ptr.is_empty() {
-                        match serial.write(wr_ptr) {
-                            Ok(len) => wr_ptr = &wr_ptr[len..],
-                            // On error, just drop unwritten data.
-                            // One possible error is Err(WouldBlock), meaning the USB
-                            // write buffer is full.
-                            Err(_) => break,
-                        };
-                    }
-
-                    serial.write(b"Echo done!\r\n").ok();
-                }
-            }
+            serial.read(&mut buf).ok();
         }
     }
 }
